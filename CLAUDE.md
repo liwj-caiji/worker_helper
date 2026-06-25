@@ -2,67 +2,80 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Commands
+## 1. 项目概述
+
+AI 驱动的个人工作经验积累工具。用户通过对话或快记输入工作内容，后端 AI 管道自动提炼为结构化经验卡片并关联技能图谱。
+
+## 2. 技术栈
+
+| 层 | 选型 | 版本 |
+|---|---|---|
+| 语言 | Python | ≥3.12 |
+| Web 框架 | FastAPI | ≥0.115 |
+| ORM | SQLAlchemy | ≥2.0.35 |
+| 数据库 | SQLite (aiosqlite) | ≥0.20 |
+| 计划任务 | APScheduler | ≥3.10 |
+| 配置管理 | pydantic-settings | ≥2.5 |
+| AI SDK | anthropic / openai | ≥0.34 / ≥1.51 |
+| 测试 | pytest + httpx | ≥8.3 / ≥0.27 |
+| 前端框架 | Vue 3 | ^3.5 |
+| 构建工具 | Vite | ^8.1 |
+| 样式 | Tailwind CSS | ^4.3 |
+| 状态管理 | Pinia | ^3.0 |
+| 路由 | Vue Router | ^4.6 |
+| HTTP 客户端 | Axios | ^1.18 |
+
+## 3. 指令
 
 ```bash
-# Run all backend tests
+# 全部后端测试
 uv run python -m pytest backend/tests/ -v
 
-# Run a single test file
-uv run python -m pytest backend/tests/test_models.py -v
+# 单测文件
+uv run python -m pytest backend/tests/test_pipeline.py -v
 
-# Run a specific test
+# 单测用例
 uv run python -m pytest backend/tests/test_pipeline.py::test_process_record_creates_card -v
 
-# Start backend dev server (port 8000)
+# 后端开发服务器 (:8000)
 uv run uvicorn backend.main:app --reload
 
-# Start frontend dev server (port 5173, proxies /api → :8000)
+# 前端开发服务器 (:5173，/api 代理到 :8000)
 cd frontend && npm run dev
 
-# Build frontend for production
+# 前端生产构建
 cd frontend && npm run build
 ```
 
-## Architecture
+## 4. 项目架构
 
-### Core data flow
+核心数据流向：
 
 ```
-User input (coach chat / quick note)
-    → RawRecord (saved in raw_records table)
-    → process_record() pipeline (AI: extract → score → tag)
-    → ExperienceCard upserted (experience_cards table, linked via source_record_id)
-    → SkillNodes created/updated
+用户输入（教练对话 / 快记）
+  → RawRecord（raw_records 表）
+  → process_record() 管道：LLM 提取 → 评分 → 打标签
+  → ExperienceCard（experience_cards 表，source_record_id 关联原始记录）
+  → SkillNode 创建或计数递增
 ```
 
-When a user edits a RawRecord, `process_record()` is called again — it upserts the linked ExperienceCard (same card, updated fields) rather than creating a duplicate.
+**三层实体关系：** RawRecord ←(1:1)→ ExperienceCard ←(N:M via JSON tags)→ SkillNode。编辑 RawRecord 后重新执行管道，upsert 同一张卡片而非新建。
 
-### LLM Provider abstraction (`backend/llm/`)
+**LLM 可替换：** `backend/llm/base.py` 定义 `LLMProvider` 抽象类（`chat(system_prompt, user_message) -> str`），`factory.py` 单例工厂根据 `settings.llm_provider` 实例化（claude / openai）。切换模型只需改 `.env` 或调设置接口，管道代码不受影响。`llm_api_key` 使用 `SecretStr`，取值需调用 `.get_secret_value()`。
 
-`LLMProvider` is an ABC with a single `chat(system_prompt, user_message) -> str` method. The singleton factory (`get_provider()`) reads `settings.llm_provider` and instantiates the matching implementation. Changing the LLM requires only updating the `.env` config or settings API — no pipeline code changes.
+**配置：** `backend/config.py` 通过 pydantic-settings 自动读取 `.env`，启动时加载。
 
-### Config
+**数据库：** SQLite + SQLAlchemy，`check_same_thread=False`。`Base.metadata.create_all()` 在 FastAPI startup 事件中执行。测试通过 `conftest.py` 的 autouse fixture 按用例重建表（drop → create → yield → drop）。
 
-`backend/config.py` uses `pydantic-settings`, reading from `.env` automatically. `llm_api_key` is typed as `SecretStr` — call `.get_secret_value()` to extract the actual key (see `factory.py:23`).
+**API 路由：**
 
-### Database
-
-SQLite via SQLAlchemy, with `check_same_thread=False` for FastAPI compatibility. `Base.metadata.create_all()` runs on startup. Tests recreate tables per-function via the `conftest.py` fixture (drop → create → yield → drop).
-
-### API endpoints
-
-| Prefix | File | Purpose |
+| 前缀 | 文件 | 职责 |
 |---|---|---|
-| `/api/records` | `routers/records.py` | RawRecord CRUD; create/update triggers pipeline |
-| `/api/cards` | `routers/cards.py` | ExperienceCard list (search/filter) + detail + update |
-| `/api/coach` | `routers/coach.py` | POST `/chat` — saves record, runs pipeline, returns AI response |
-| `/api/settings` | `routers/settings.py` | LLM config (GET/PUT), reminder config, reminder status poll |
+| `/api/records` | `routers/records.py` | 原始记录 CRUD，创建/更新触发加工管道 |
+| `/api/cards` | `routers/cards.py` | 经验卡片列表（搜索/技能筛选）+ 详情 + 更新 |
+| `/api/coach` | `routers/coach.py` | POST `/chat`，保存记录并返回 AI 教练回复 |
+| `/api/settings` | `routers/settings.py` | LLM 配置读写、提醒配置读写、提醒状态轮询 |
 
-### Frontend
+**前端：** Vue 3 SPA，Vite 开发代理 `/api` → `localhost:8000`。Pinia store 管理侧边栏快记和提醒弹窗状态。`App.vue` 每 60 秒轮询 `/api/settings/reminder/status` 触发弹窗。
 
-Vue 3 SPA with Vite dev proxy (`/api` → `localhost:8000`). Pinia store (`useAppStore`) manages `showQuickNote` and `showReminder` state. The `App.vue` polls `/api/settings/reminder/status` every 60s for the reminder popup trigger.
-
-### Key schema detail
-
-`ExperienceCardOut.metadata_` uses `serialization_alias="metadata"` (not `alias`) because SQLAlchemy's Base already has a `metadata` attribute. The column is named `metadata_` in Python but stores as `"metadata"` in DB and JSON.
+**注意：** `ExperienceCardOut.metadata_` 字段使用 `serialization_alias="metadata"` 而非 `alias`，因为 SQLAlchemy Base 已占用 `metadata` 属性名。

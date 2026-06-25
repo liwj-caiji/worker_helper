@@ -38,9 +38,9 @@ class ExperienceCardOut(BaseModel):
     processed_at: Optional[datetime]
     source_record_id: Optional[str]
     source_updated_at: Optional[datetime]
-    metadata_: Optional[dict] = Field(alias="metadata", default=None)
+    metadata_: Optional[dict] = Field(serialization_alias="metadata", default=None)
 
-    model_config = {"from_attributes": True, "populate_by_name": True}
+    model_config = {"from_attributes": True}
 
 
 class ExperienceCardUpdate(BaseModel):

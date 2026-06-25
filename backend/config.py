@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -5,7 +6,7 @@ from typing import Optional
 class Settings(BaseSettings):
     # LLM config
     llm_provider: str = "claude"
-    llm_api_key: str = ""
+    llm_api_key: SecretStr = SecretStr("")
     llm_base_url: Optional[str] = None
     llm_model: str = "claude-sonnet-4-6"
 

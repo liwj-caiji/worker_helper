@@ -9,6 +9,7 @@
 | # | 日期 | 问题 | 状态 |
 |---|------|------|------|
 | 1 | 2026-06-25 | 教练对话回复延迟 ~60s | ✅ 已解决 |
+| 2 | 2026-06-26 | 教练对话无上下文，每次请求失忆 | ✅ 已解决 |
 
 ---
 
@@ -30,3 +31,22 @@
 3. `backend/llm/factory.py` — DeepSeek 提供商默认启用 `disable_thinking=True`
 
 **最终效果:** 端到端延迟从 ~60s 降至 ~2s。
+
+---
+
+### 问题 2: 教练对话无上下文（每次请求失忆）
+
+**日期:** 2026-06-26
+
+**现象:** 教练对话中 AI 不记得之前说过什么。用户刚介绍完项目，下一轮 AI 又从头打招呼"你好呀！今天做了什么工作？"，无法深入引导。
+
+**根因分析:**
+
+`CoachMessage` 只包含 `content` 字段，没有传递对话历史。后端 `get_coach_response()` 支持 `conversation_history` 参数，但端点从未传入，导致每次请求都被当作全新会话。
+
+**解决方案:**
+
+1. `backend/schemas.py` — `CoachMessage` 新增 `history` 字段（`list[ChatHistoryItem]`）
+2. `backend/routers/coach.py` — 端点将 `message.history` 传入 `get_coach_response`
+3. `frontend/src/api/index.js` — `coachChat()` 增加 `history` 参数
+4. `frontend/src/components/CoachChat.vue` — `send()` 时将当前消息列表作为 history 发送

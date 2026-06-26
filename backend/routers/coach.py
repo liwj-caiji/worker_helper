@@ -32,5 +32,6 @@ def coach_chat(message: CoachMessage, db: Session = Depends(get_db)):
     if len(message.content.strip()) > 10:
         threading.Thread(target=_process_async, args=(record.id,), daemon=True).start()
 
-    response = get_coach_response(message.content)
+    history = [{"role": h.role, "content": h.content} for h in message.history]
+    response = get_coach_response(message.content, conversation_history=history)
     return {"response": response, "record_id": record.id}

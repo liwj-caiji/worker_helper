@@ -77,5 +77,11 @@ class ReminderSettingsUpdate(BaseModel):
 
 
 # --- Coach ---
+class ChatHistoryItem(BaseModel):
+    role: str
+    content: str
+
+
 class CoachMessage(BaseModel):
     content: str
+    history: list[ChatHistoryItem] = []

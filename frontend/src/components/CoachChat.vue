@@ -50,7 +50,8 @@ async function send() {
   await nextTick()
   scrollBottom()
   try {
-    const { data } = await api.coachChat(userMsg)
+    const history = messages.value.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+    const { data } = await api.coachChat(userMsg, history)
     messages.value.push({ role: 'coach', content: data.response })
   } catch {
     messages.value.push({ role: 'coach', content: '抱歉，出了点问题。请稍后再试。' })

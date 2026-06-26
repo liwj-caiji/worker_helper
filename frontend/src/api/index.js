@@ -32,8 +32,8 @@ export default {
   },
 
   // Coach
-  coachChat(content) {
-    return api.post('/coach/chat', { content })
+  coachChat(content, history = []) {
+    return api.post('/coach/chat', { content, history })
   },
 
   // Settings

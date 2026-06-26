@@ -29,5 +29,7 @@ def _create_provider() -> LLMProvider:
             return ClaudeProvider(api_key=api_key, model=model, base_url=base_url)
         case "openai":
             return OpenAIProvider(api_key=api_key, model=model, base_url=base_url)
+        case "deepseek":
+            return OpenAIProvider(api_key=api_key, model=model, base_url=base_url, disable_thinking=True)
         case _:
             raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")

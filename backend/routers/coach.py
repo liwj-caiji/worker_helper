@@ -1,13 +1,25 @@
+import threading
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
 from backend.models import RawRecord, SourceType
 from backend.schemas import CoachMessage
 from backend.services.coach import get_coach_response
 from backend.services.pipeline import process_record
 
 router = APIRouter(prefix="/api/coach", tags=["coach"])
+
+
+def _process_async(record_id: int):
+    db = SessionLocal()
+    try:
+        record = db.query(RawRecord).filter(RawRecord.id == record_id).first()
+        if record and record.process_status != "processed":
+            process_record(db, record)
+    finally:
+        db.close()
 
 
 @router.post("/chat")
@@ -18,8 +30,7 @@ def coach_chat(message: CoachMessage, db: Session = Depends(get_db)):
     db.refresh(record)
 
     if len(message.content.strip()) > 10:
-        process_record(db, record)
-        db.refresh(record)
+        threading.Thread(target=_process_async, args=(record.id,), daemon=True).start()
 
     response = get_coach_response(message.content)
     return {"response": response, "record_id": record.id}
